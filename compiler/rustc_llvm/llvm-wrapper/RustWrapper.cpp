@@ -1284,6 +1284,15 @@ extern "C" LLVMMetadataRef LLVMRustDIBuilderCreateTemplateTypeParameter(
       unwrapDI<DIType>(Ty), IsDefault));
 }
 
+extern "C" LLVMMetadataRef LLVMRustDIBuilderCreateTemplateValueParameter(
+    LLVMDIBuilderRef Builder, LLVMMetadataRef Scope, const char *Name,
+    size_t NameLen, LLVMMetadataRef Ty, LLVMValueRef Val) {
+  bool IsDefault = false; // FIXME: should we ever set this true?
+  return wrap(unwrap(Builder)->createTemplateValueParameter(
+      unwrapDI<DIDescriptor>(Scope), StringRef(Name, NameLen),
+      unwrapDI<DIType>(Ty), IsDefault, unwrap<llvm::Constant>(Val)));
+}
+
 extern "C" void LLVMRustDICompositeTypeReplaceArrays(
     LLVMDIBuilderRef Builder, LLVMMetadataRef CompositeTy,
     LLVMMetadataRef Elements, LLVMMetadataRef Params) {

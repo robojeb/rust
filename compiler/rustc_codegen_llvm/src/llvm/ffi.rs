@@ -27,7 +27,8 @@ use super::RustString;
 use super::debuginfo::{
     DIArray, DIBasicType, DIBuilder, DICompositeType, DIDerivedType, DIDescriptor, DIEnumerator,
     DIFile, DIFlags, DIGlobalVariableExpression, DILocation, DISPFlags, DIScope, DISubprogram,
-    DISubrange, DITemplateTypeParameter, DIType, DIVariable, DebugEmissionKind, DebugNameTableKind,
+    DISubrange, DITemplateTypeParameter, DITemplateValueParameter, DIType, DIVariable, 
+    DebugEmissionKind, DebugNameTableKind,
 };
 use crate::llvm;
 
@@ -845,6 +846,7 @@ pub(crate) mod debuginfo {
     pub(crate) type DISubrange = DIDescriptor;
     pub(crate) type DIEnumerator = DIDescriptor;
     pub(crate) type DITemplateTypeParameter = DIDescriptor;
+    pub(crate) type DITemplateValueParameter = DIDescriptor;
 
     bitflags! {
         /// Must match the layout of `LLVMDIFlags` in the LLVM-C API.
@@ -2376,6 +2378,15 @@ unsafe extern "C" {
         NameLen: size_t,
         Ty: &'a DIType,
     ) -> &'a DITemplateTypeParameter;
+
+    pub(crate) fn LLVMRustDIBuilderCreateTemplateValueParameter<'a>(
+        Builder: &DIBuilder<'a>,
+        Scope: Option<&'a DIScope>,
+        Name: *const c_char,
+        NameLen: size_t,
+        Ty: &'a DIType,
+        Val: &'a Value,
+    ) -> &'a DITemplateValueParameter;
 
     pub(crate) fn LLVMRustDICompositeTypeReplaceArrays<'a>(
         Builder: &DIBuilder<'a>,

@@ -35,8 +35,7 @@ use crate::builder::Builder;
 use crate::common::{AsCCharPtr, CodegenCx};
 use crate::llvm;
 use crate::llvm::debuginfo::{
-    DIArray, DIBuilderBox, DIFile, DIFlags, DILexicalBlock, DILocation, DISPFlags, DIScope,
-    DITemplateTypeParameter, DIType, DIVariable,
+    DIArray, DIBuilderBox, DIFile, DIFlags, DILexicalBlock, DILocation, DISPFlags, DIScope, DITemplateTypeParameter, DITemplateValueParameter, DIType, DIVariable
 };
 use crate::value::Value;
 
@@ -297,6 +296,24 @@ impl<'ll> CodegenCx<'ll, '_> {
                 name.as_c_char_ptr(),
                 name.len(),
                 actual_type_metadata,
+            )
+        }
+    }
+
+    fn create_template_value_parameter(
+        &self,
+        name: &str,
+        actual_type_metadata: &'ll DIType,
+        actual_value_metadata: &'ll Value,
+    ) -> &'ll DITemplateValueParameter {
+        unsafe {
+            llvm::LLVMRustDIBuilderCreateTemplateValueParameter(
+                DIB(self), 
+                None, 
+                name.as_c_char_ptr(), 
+                name.len(), 
+                actual_type_metadata, 
+                actual_value_metadata
             )
         }
     }

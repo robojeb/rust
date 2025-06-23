@@ -16,7 +16,7 @@ use rustc_middle::ty::layout::{
     HasTypingEnv, LayoutOf, TyAndLayout, WIDE_PTR_ADDR, WIDE_PTR_EXTRA,
 };
 use rustc_middle::ty::{
-    self, AdtKind, CoroutineArgsExt, ExistentialTraitRef, Instance, Ty, TyCtxt, Visibility,
+    self, AdtKind, CoroutineArgsExt, ExistentialTraitRef, GenericArgKind, Instance, Ty, TyCtxt, Visibility
 };
 use rustc_session::config::{self, DebugInfo, Lto};
 use rustc_span::{DUMMY_SP, FileName, FileNameDisplayPreference, SourceFile, Symbol, hygiene};
@@ -1315,21 +1315,43 @@ fn build_generic_type_param_di_nodes<'ll, 'tcx>(
     ty: Ty<'tcx>,
 ) -> SmallVec<Option<&'ll DIType>> {
     if let ty::Adt(def, args) = *ty.kind() {
-        if args.types().next().is_some() {
+        if args.non_erasable_generics().next().is_some() {
             let generics = cx.tcx.generics_of(def.did());
             let names = get_parameter_names(cx, generics);
             let template_params: SmallVec<_> = iter::zip(args, names)
                 .filter_map(|(kind, name)| {
-                    kind.as_type().map(|ty| {
-                        let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
-                        let actual_type_di_node = type_di_node(cx, actual_type);
-                        Some(cx.create_template_type_parameter(name.as_str(), actual_type_di_node))
-                    })
+                    match kind.kind() {
+                        GenericArgKind::Type(ty) => {
+                            let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
+                            let actual_type_di_node = type_di_node(cx, actual_type);
+                            Some(Some(cx.create_template_type_parameter(name.as_str(), actual_type_di_node)))
+                        }
+                        GenericArgKind::Const(cnst) => {
+                            let v = cnst.try_to_value().expect("Jeb: Test failed");
+                            Some(None)
+                        }
+                        _ => None,
+                    }
                 })
                 .collect();
-
             return template_params;
         }
+        
+        // if args.types().next().is_some() {
+        //     let generics = cx.tcx.generics_of(def.did());
+        //     let names = get_parameter_names(cx, generics);
+        //     let template_params: SmallVec<_> = iter::zip(args, names)
+        //         .filter_map(|(kind, name)| {
+        //             kind.as_type().map(|ty| {
+        //                 let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
+        //                 let actual_type_di_node = type_di_node(cx, actual_type);
+        //                 Some(cx.create_template_type_parameter(name.as_str(), actual_type_di_node))
+        //             })
+        //         })
+        //         .collect();
+
+        //     return template_params;
+        // }
     }
 
     return smallvec![];
