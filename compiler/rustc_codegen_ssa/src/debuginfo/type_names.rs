@@ -685,6 +685,18 @@ fn push_const_param<'tcx>(tcx: TyCtxt<'tcx>, ct: ty::Const<'tcx>, output: &mut S
                         .expect("expected monomorphic const in codegen");
                     write!(output, "{val}")
                 }
+                ty::Char => {
+                    let val = cv
+                        .try_to_bits(tcx, ty::TypingEnv::fully_monomorphized())
+                        .expect("expected monomorphic const in codegen");
+
+                    let val_char = unsafe { char::from_u32_unchecked(val as u32) };
+                    if val_char.is_ascii_graphic() {
+                        write!(output, "'{val_char}'")
+                    } else {
+                        write!(output, "'\\u{val:04}'")
+                    }
+                }
                 ty::Bool => {
                     let val = cv.try_to_bool().expect("expected monomorphic const in codegen");
                     write!(output, "{val}")

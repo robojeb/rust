@@ -16,7 +16,8 @@ use rustc_middle::ty::layout::{
     HasTypingEnv, LayoutOf, TyAndLayout, WIDE_PTR_ADDR, WIDE_PTR_EXTRA,
 };
 use rustc_middle::ty::{
-    self, AdtKind, CoroutineArgsExt, ExistentialTraitRef, GenericArgKind, Instance, Ty, TyCtxt, Visibility
+    self, AdtKind, CoroutineArgsExt, ExistentialTraitRef, GenericArgKind, Instance, Ty, TyCtxt,
+    Visibility,
 };
 use rustc_session::config::{self, DebugInfo, Lto};
 use rustc_span::{DUMMY_SP, FileName, FileNameDisplayPreference, SourceFile, Symbol, hygiene};
@@ -1309,6 +1310,38 @@ fn build_union_type_di_node<'ll, 'tcx>(
     )
 }
 
+pub(crate) fn valtree_to_llvm<'ll, 'tcx>(
+    cx: &CodegenCx<'ll, 'tcx>,
+    ty: Ty<'tcx>,
+    value: &ty::ValTree<'tcx>,
+) -> Option<&'ll Value> {
+    value.try_to_scalar_int().and_then(|si| match ty.kind() {
+        ty::Bool => Some(cx.const_bool(si.to_bits_unchecked() != 0)),
+        ty::Char => Some(cx.const_u32((si.to_bits(Size::from_bits(32)) & 0xFFFF_FFFF) as u32)),
+        ty::Int(ty::IntTy::I8) => Some(cx.const_i8((si.to_bits(Size::from_bits(8)) & 0xFF) as i8)),
+        ty::Int(ty::IntTy::I16) => {
+            Some(cx.const_i16((si.to_bits(Size::from_bits(16)) & 0xFFFF) as i16))
+        }
+        ty::Int(ty::IntTy::I32) => {
+            Some(cx.const_i32((si.to_bits(Size::from_bits(32)) & 0xFFFF_FFFF) as i32))
+        }
+        ty::Uint(ty::UintTy::U8) => {
+            Some(cx.const_u8((si.to_bits(Size::from_bits(8)) & 0xFF) as u8))
+        }
+        ty::Uint(ty::UintTy::U32) => {
+            Some(cx.const_u32((si.to_bits(Size::from_bits(32)) & 0xFFFF_FFFF) as u32))
+        }
+        ty::Uint(ty::UintTy::U64) => {
+            Some(cx.const_u64((si.to_bits(Size::from_bits(64)) & 0xFFFF_FFFF_FFFF_FFFF) as u64))
+        }
+        ty::Uint(ty::UintTy::U128) => Some(cx.const_u128(si.to_bits(Size::from_bits(128)))),
+        ty::Uint(ty::UintTy::Usize) => {
+            Some(cx.const_usize((si.to_bits_unchecked() & 0xFFFFFFFF_FFFFFFFF) as u64))
+        }
+        _ => None,
+    })
+}
+
 /// Computes the type parameters for a type, if any, for the given metadata.
 fn build_generic_type_param_di_nodes<'ll, 'tcx>(
     cx: &CodegenCx<'ll, 'tcx>,
@@ -1319,39 +1352,32 @@ fn build_generic_type_param_di_nodes<'ll, 'tcx>(
             let generics = cx.tcx.generics_of(def.did());
             let names = get_parameter_names(cx, generics);
             let template_params: SmallVec<_> = iter::zip(args, names)
-                .filter_map(|(kind, name)| {
-                    match kind.kind() {
-                        GenericArgKind::Type(ty) => {
-                            let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
-                            let actual_type_di_node = type_di_node(cx, actual_type);
-                            Some(Some(cx.create_template_type_parameter(name.as_str(), actual_type_di_node)))
-                        }
-                        GenericArgKind::Const(cnst) => {
-                            let v = cnst.try_to_value().expect("Jeb: Test failed");
-                            Some(None)
-                        }
-                        _ => None,
+                .filter_map(|(kind, name)| match kind.kind() {
+                    GenericArgKind::Type(ty) => {
+                        let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
+                        let actual_type_di_node = type_di_node(cx, actual_type);
+                        Some(Some(
+                            cx.create_template_type_parameter(name.as_str(), actual_type_di_node),
+                        ))
                     }
+                    GenericArgKind::Const(cnst) => {
+                        let value = cnst.try_to_value()?;
+                        let actual_type =
+                            cx.tcx.normalize_erasing_regions(cx.typing_env(), value.ty);
+                        let actual_type_di_node = type_di_node(cx, actual_type);
+                        // FIXME: Evaluate actual constant
+                        let actual_value = valtree_to_llvm(cx, actual_type, &value.valtree)?;
+                        Some(Some(cx.create_template_value_parameter(
+                            name.as_str(),
+                            actual_type_di_node,
+                            actual_value,
+                        )))
+                    }
+                    _ => None,
                 })
                 .collect();
             return template_params;
         }
-        
-        // if args.types().next().is_some() {
-        //     let generics = cx.tcx.generics_of(def.did());
-        //     let names = get_parameter_names(cx, generics);
-        //     let template_params: SmallVec<_> = iter::zip(args, names)
-        //         .filter_map(|(kind, name)| {
-        //             kind.as_type().map(|ty| {
-        //                 let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
-        //                 let actual_type_di_node = type_di_node(cx, actual_type);
-        //                 Some(cx.create_template_type_parameter(name.as_str(), actual_type_di_node))
-        //             })
-        //         })
-        //         .collect();
-
-        //     return template_params;
-        // }
     }
 
     return smallvec![];

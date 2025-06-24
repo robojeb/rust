@@ -35,7 +35,8 @@ use crate::builder::Builder;
 use crate::common::{AsCCharPtr, CodegenCx};
 use crate::llvm;
 use crate::llvm::debuginfo::{
-    DIArray, DIBuilderBox, DIFile, DIFlags, DILexicalBlock, DILocation, DISPFlags, DIScope, DITemplateTypeParameter, DITemplateValueParameter, DIType, DIVariable
+    DIArray, DIBuilderBox, DIFile, DIFlags, DILexicalBlock, DILocation, DISPFlags, DIScope,
+    DITemplateTypeParameter, DITemplateValueParameter, DIType, DIVariable,
 };
 use crate::value::Value;
 
@@ -300,6 +301,7 @@ impl<'ll> CodegenCx<'ll, '_> {
         }
     }
 
+    #[allow(dead_code)]
     fn create_template_value_parameter(
         &self,
         name: &str,
@@ -308,12 +310,12 @@ impl<'ll> CodegenCx<'ll, '_> {
     ) -> &'ll DITemplateValueParameter {
         unsafe {
             llvm::LLVMRustDIBuilderCreateTemplateValueParameter(
-                DIB(self), 
-                None, 
-                name.as_c_char_ptr(), 
-                name.len(), 
-                actual_type_metadata, 
-                actual_value_metadata
+                DIB(self),
+                None,
+                name.as_c_char_ptr(),
+                name.len(),
+                actual_type_metadata,
+                actual_value_metadata,
             )
         }
     }
@@ -516,14 +518,40 @@ impl<'ll, 'tcx> DebugInfoCodegenMethods<'tcx> for CodegenCx<'ll, 'tcx> {
                 let names = get_parameter_names(cx, generics);
                 iter::zip(args, names)
                     .filter_map(|(kind, name)| {
-                        kind.as_type().map(|ty| {
-                            let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
-                            let actual_type_metadata = type_di_node(cx, actual_type);
-                            Some(cx.create_template_type_parameter(
-                                name.as_str(),
-                                actual_type_metadata,
-                            ))
-                        })
+                        match kind.kind() {
+                            ty::GenericArgKind::Type(ty) => {
+                                let actual_type =
+                                    cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
+                                let actual_type_di_node = type_di_node(cx, actual_type);
+                                Some(Some(cx.create_template_type_parameter(
+                                    name.as_str(),
+                                    actual_type_di_node,
+                                )))
+                            }
+                            ty::GenericArgKind::Const(cnst) => {
+                                let value = cnst.try_to_value()?;
+                                let actual_type =
+                                    cx.tcx.normalize_erasing_regions(cx.typing_env(), value.ty);
+                                let actual_type_di_node = type_di_node(cx, actual_type);
+                                // FIXME: Evaluate actual constant
+                                let actual_value =
+                                    metadata::valtree_to_llvm(cx, actual_type, &value.valtree)?;
+                                Some(Some(cx.create_template_value_parameter(
+                                    name.as_str(),
+                                    actual_type_di_node,
+                                    actual_value,
+                                )))
+                            }
+                            _ => None,
+                        }
+                        // kind.as_type().map(|ty| {
+                        //     let actual_type = cx.tcx.normalize_erasing_regions(cx.typing_env(), ty);
+                        //     let actual_type_metadata = type_di_node(cx, actual_type);
+                        //     Some(cx.create_template_type_parameter(
+                        //         name.as_str(),
+                        //         actual_type_metadata,
+                        //     ))
+                        // })
                     })
                     .collect()
             } else {

@@ -27,7 +27,7 @@ use super::RustString;
 use super::debuginfo::{
     DIArray, DIBasicType, DIBuilder, DICompositeType, DIDerivedType, DIDescriptor, DIEnumerator,
     DIFile, DIFlags, DIGlobalVariableExpression, DILocation, DISPFlags, DIScope, DISubprogram,
-    DISubrange, DITemplateTypeParameter, DITemplateValueParameter, DIType, DIVariable, 
+    DISubrange, DITemplateTypeParameter, DITemplateValueParameter, DIType, DIVariable,
     DebugEmissionKind, DebugNameTableKind,
 };
 use crate::llvm;
@@ -846,6 +846,7 @@ pub(crate) mod debuginfo {
     pub(crate) type DISubrange = DIDescriptor;
     pub(crate) type DIEnumerator = DIDescriptor;
     pub(crate) type DITemplateTypeParameter = DIDescriptor;
+    #[allow(dead_code)]
     pub(crate) type DITemplateValueParameter = DIDescriptor;
 
     bitflags! {
@@ -2379,6 +2380,7 @@ unsafe extern "C" {
         Ty: &'a DIType,
     ) -> &'a DITemplateTypeParameter;
 
+    #[allow(dead_code)]
     pub(crate) fn LLVMRustDIBuilderCreateTemplateValueParameter<'a>(
         Builder: &DIBuilder<'a>,
         Scope: Option<&'a DIScope>,
